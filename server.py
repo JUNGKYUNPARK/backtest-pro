@@ -1450,6 +1450,7 @@ def _load_cloud_config() -> Dict[str, Any]:
             "github_repo_url": "",
             "render_url": os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/"),
             "cloud_url": "",
+            "render_deploy_hook": os.environ.get("RENDER_DEPLOY_HOOK", "").strip(),
             "auto_sync_strategies": True,
             "last_sync_at": "",
             "last_deploy_at": "",
@@ -1484,7 +1485,7 @@ def _save_cloud_config(updates: Dict[str, Any]) -> Dict[str, Any]:
     with _CLOUD_LOCK:
         cfg = _load_cloud_config()
         for k, v in updates.items():
-            if k == "gh_token" and not str(v or "").strip():
+            if k in ("gh_token", "render_deploy_hook") and not str(v or "").strip():
                 continue
             cfg[k] = v
         if "render_url" in updates:
@@ -1513,6 +1514,7 @@ def _public_cloud_config(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]
         "github_repo_url": str(c.get("github_repo_url") or ""),
         "render_url": r_url,
         "cloud_url": r_url,
+        "has_deploy_hook": bool(str(c.get("render_deploy_hook") or "").strip()),
         "auto_sync_strategies": bool(c.get("auto_sync_strategies", True)),
         "in_cloud": bool(os.environ.get("RENDER")),
         "last_sync_at": str(c.get("last_sync_at") or ""),
@@ -2174,6 +2176,8 @@ async def api_save_cloud_config(req: Request):
         updates["render_url"] = c_url
         if c_url:
             updates["last_sync_note"] = f"Render 24시간 서버 연결됨 ({c_url})"
+    if "render_deploy_hook" in body and str(body.get("render_deploy_hook") or "").strip():
+        updates["render_deploy_hook"] = str(body["render_deploy_hook"]).strip()
     if "auto_sync_strategies" in body:
         updates["auto_sync_strategies"] = bool(body.get("auto_sync_strategies"))
     cfg = _save_cloud_config(updates)
@@ -2232,18 +2236,35 @@ async def api_cloud_github_deploy(req: Request):
         )
     try:
         res = _upload_project_to_github(gh_token, repo_name)
+        deploy_hook = str(body.get("render_deploy_hook") or saved.get("render_deploy_hook") or "").strip()
+        hook_triggered = False
+        if deploy_hook.startswith("https://api.render.com/deploy/"):
+            try:
+                with urllib.request.urlopen(deploy_hook, timeout=15) as r_hook:
+                    hook_triggered = 200 <= getattr(r_hook, "status", 200) < 300
+            except Exception:
+                hook_triggered = False
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cfg = _save_cloud_config({
+        note = (
+            f"GitHub 업로드 및 Render 자동 재배포 호출 완료 ({res['repo']}, {res['files_uploaded']}개 파일)"
+            if hook_triggered
+            else f"GitHub 업로드 완료 ({res['repo']}, {res['files_uploaded']}개 파일)"
+        )
+        updates_cfg: Dict[str, Any] = {
             "gh_token": gh_token,
             "github_repo": res["repo"],
             "github_branch": res["default_branch"],
             "github_repo_url": res["repo_url"],
             "last_deploy_at": now_str,
             "last_sync_at": now_str,
-            "last_sync_note": f"GitHub 업로드 완료 ({res['repo']}, {res['files_uploaded']}개 파일)",
-        })
+            "last_sync_note": note,
+        }
+        if deploy_hook:
+            updates_cfg["render_deploy_hook"] = deploy_hook
+        cfg = _save_cloud_config(updates_cfg)
         return JSONResponse(_clean_json({
             "ok": True,
+            "render_deploy_triggered": hook_triggered,
             **res,
             "cloud": _public_cloud_config(cfg),
         }))
