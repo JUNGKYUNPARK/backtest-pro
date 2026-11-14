@@ -150,6 +150,17 @@ HISTORICAL_EVENTS = [
     {"date": "2024-11-06", "label": "트럼프 2기 당선", "market": "GLOBAL", "type": "bull", "category": "macro"},
     {"date": "2024-12-04", "label": "국내 계엄·정치충격", "market": "KR", "type": "shock", "category": "macro"},
     {"date": "2025-04-07", "label": "관세 쇼크", "market": "GLOBAL", "type": "crisis", "category": "macro"},
+    {"date": "2025-04-09", "label": "상호관세 유예 급등", "market": "GLOBAL", "type": "policy", "category": "macro"},
+    {"date": "2025-06-04", "label": "신정부 출범·증시부양", "market": "KR", "type": "policy", "category": "macro"},
+    {"date": "2025-09-18", "label": "연준 금리인하 재개", "market": "GLOBAL", "type": "policy", "category": "macro"},
+    {"date": "2025-12-10", "label": "연준 3연속 금리인하", "market": "GLOBAL", "type": "policy", "category": "macro"},
+    {"date": "2026-01-27", "label": "코스피 5000 돌파", "market": "KR", "type": "bull", "category": "macro"},
+    {"date": "2026-03-04", "label": "3월 서킷브레이커", "market": "KR", "type": "shock", "category": "macro"},
+    {"date": "2026-06-23", "label": "고점 피크·검은화요일", "market": "KR", "type": "shock", "category": "macro"},
+    {"date": "2026-07-28", "label": "이틀연속 서킷브레이커", "market": "KR", "type": "crisis", "category": "macro"},
+    {"date": "2026-07-31", "label": "사이드카 역대최대 반등", "market": "KR", "type": "bull", "category": "macro"},
+    {"date": "2026-10-15", "label": "글로벌 반도체·AI 투매", "market": "GLOBAL", "type": "shock", "category": "macro"},
+    {"date": "2026-11-05", "label": "AI 규제·빅테크 급락", "market": "GLOBAL", "type": "crisis", "category": "macro"},
 ]
 
 SCANNER_BASKETS = {
@@ -1180,11 +1191,11 @@ async def api_index_events(symbol: str = "^KS11", start_date: str = "2018-01-01"
             if not a_date:
                 continue
             m = _compute_index_event_metrics(dates, close_s, pct_s, dd_s, a_date)
-            chg = float(aev.get("chg_pct", 0.0) or 0.0)
+            chg = float(aev.get("ret_pct", aev.get("chg_pct", 0.0)) or 0.0)
             auto_mapped.append({
                 "date": a_date,
-                "label": str(aev.get("title") or f"{meta['short']} {chg:+.1f}%"),
-                "full_title": str(aev.get("full_title") or aev.get("title") or ""),
+                "label": str(aev.get("label") or aev.get("title") or f"{meta['short']} {chg:+.1f}%"),
+                "full_title": str(aev.get("full_title") or aev.get("label") or aev.get("title") or ""),
                 "url": str(aev.get("url") or ""),
                 "source": str(aev.get("source") or ""),
                 "chg_pct": round(chg, 2),

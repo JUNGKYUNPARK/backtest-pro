@@ -486,15 +486,28 @@ def fetch_point_in_time_shock_news(
         if len(close) >= 5:
             date_key = f"{close.index[0].strftime('%Y-%m-%d')}:{close.index[-1].strftime('%Y-%m-%d')}"
             rets = (close.pct_change() * 100.0).dropna()
+            picked: list[tuple[pd.Timestamp, float]] = []
+            recent_cutoff = close.index[-1] - pd.Timedelta(days=365)
+            recent_rets = rets[rets.index >= recent_cutoff]
+            recent_cands = recent_rets[recent_rets.abs() >= 2.5]
+            if len(recent_cands) < 2:
+                recent_cands = recent_rets[recent_rets.abs() >= 1.8]
+            recent_sorted = recent_cands.reindex(recent_cands.abs().sort_values(ascending=False).index)
+            recent_quota = max(2, (max_events + 1) // 2)
+            for dt, r in recent_sorted.items():
+                if all(abs((dt - p_dt).days) >= 25 for p_dt, _ in picked):
+                    picked.append((pd.Timestamp(dt), float(r)))
+                if len(picked) >= recent_quota:
+                    break
+
             candidates = rets[rets.abs() >= 3.5].reindex(
                 rets[rets.abs() >= 3.5].abs().sort_values(ascending=False).index
             )
-            picked: list[tuple[pd.Timestamp, float]] = []
             for dt, r in candidates.items():
-                if all(abs((dt - p_dt).days) >= 25 for p_dt, _ in picked):
-                    picked.append((pd.Timestamp(dt), float(r)))
                 if len(picked) >= max_events:
                     break
+                if all(abs((dt - p_dt).days) >= 25 for p_dt, _ in picked):
+                    picked.append((pd.Timestamp(dt), float(r)))
             shock_days = sorted(picked, key=lambda x: x[0])
 
     cache_key = (t, q_name, date_key, max_events)
