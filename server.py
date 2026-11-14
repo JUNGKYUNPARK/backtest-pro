@@ -633,8 +633,28 @@ def serve_index():
     return FileResponse(index_path, headers={"Cache-Control": "no-cache"})
 
 
+def _is_local_request(req: Request) -> bool:
+    if os.environ.get("RENDER"):
+        return False
+    if req.headers.get("cf-connecting-ip") or req.headers.get("x-forwarded-for") or req.headers.get("x-forwarded-host"):
+        return False
+    client_ip = (req.client.host if req.client else "").strip().lower()
+    if client_ip not in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return False
+    host_hdr = req.headers.get("host", "").split(":")[0].strip().lower()
+    return host_hdr in ("localhost", "127.0.0.1", "::1", "[::1]", "testserver", "")
+
+
+def _require_local_admin(req: Request):
+    if not _is_local_request(req):
+        raise HTTPException(
+            status_code=403,
+            detail="보안상 모바일·외부접속 및 클라우드 배포 설정은 서버가 실행 중인 내 PC(localhost)에서만 접근할 수 있습니다.",
+        )
+
+
 @app.get("/api/init")
-def api_init():
+def api_init(req: Request):
     universe = get_all_universe(include_full_krx=False)
     universe_fmt = [
         {
@@ -668,6 +688,7 @@ def api_init():
         "historical_events": HISTORICAL_EVENTS,
         "saved_strategies": _list_saved_strategies(),
         "today": datetime.date.today().strftime("%Y-%m-%d"),
+        "is_local_admin": _is_local_request(req),
     }))
 
 
@@ -1129,6 +1150,9 @@ async def api_index_events(symbol: str = "^KS11", start_date: str = "2018-01-01"
     if close_s.empty:
         raise HTTPException(status_code=400, detail=f"유효한 종가 시계열이 없습니다: {sym}")
     df_view = df_view.loc[close_s.index]
+    open_s = pd.to_numeric(df_view["Open"], errors="coerce").fillna(close_s) if "Open" in df_view.columns else close_s
+    high_s = pd.to_numeric(df_view["High"], errors="coerce").fillna(close_s) if "High" in df_view.columns else close_s
+    low_s = pd.to_numeric(df_view["Low"], errors="coerce").fillna(close_s) if "Low" in df_view.columns else close_s
 
     first_close = float(close_s.iloc[0])
     pct_s = ((close_s / first_close) - 1.0) * 100.0 if first_close > 0 else close_s * 0.0
@@ -1198,6 +1222,9 @@ async def api_index_events(symbol: str = "^KS11", start_date: str = "2018-01-01"
         "summary": summary,
         "series": {
             "dates": dates,
+            "opens": [round(float(v), 2) for v in open_s.tolist()],
+            "highs": [round(float(v), 2) for v in high_s.tolist()],
+            "lows": [round(float(v), 2) for v in low_s.tolist()],
             "closes": [round(float(v), 2) for v in close_s.tolist()],
             "pct": [round(float(v), 2) for v in pct_s.tolist()],
             "drawdown": [round(float(v), 2) for v in dd_s.tolist()],
@@ -1908,7 +1935,10 @@ async def _pin_auth_middleware(req: Request, call_next):
                 status_code=401,
                 headers={"WWW-Authenticate": 'Basic realm="Backtest Pro Access"'},
             )
-    return await call_next(req)
+    res = await call_next(req)
+    if req.url.path.startswith("/static/"):
+        res.headers["Cache-Control"] = "no-cache"
+    return res
 
 
 def _get_lan_ip() -> str:
@@ -2095,28 +2125,37 @@ def serve_manifest():
 
 
 @app.get("/api/access/info")
-def api_access_info():
-    return JSONResponse(_access_payload())
+def api_access_info(req: Request):
+    if not _is_local_request(req):
+        return JSONResponse({
+            "is_local_admin": False,
+            "tunnel_status": "hidden",
+            "pin_required": bool(_ACCESS_PIN),
+        })
+    return JSONResponse({**_access_payload(), "is_local_admin": True})
 
 
 @app.post("/api/access/tunnel")
 async def api_access_tunnel(req: Request):
+    _require_local_admin(req)
     body = await req.json()
     action = str(body.get("action", "start") or "start").lower()
     if action == "stop":
         _stop_tunnel()
     else:
         _start_public_tunnel(_SERVER_PORT)
-    return JSONResponse(_access_payload())
+    return JSONResponse({**_access_payload(), "is_local_admin": True})
 
 
 @app.get("/api/cloud/config")
-def api_get_cloud_config():
+def api_get_cloud_config(req: Request):
+    _require_local_admin(req)
     return JSONResponse(_clean_json(_public_cloud_config()))
 
 
 @app.post("/api/cloud/config")
 async def api_save_cloud_config(req: Request):
+    _require_local_admin(req)
     body = await req.json()
     updates: Dict[str, Any] = {}
     if "gh_token" in body and str(body.get("gh_token") or "").strip():
@@ -2166,7 +2205,8 @@ async def api_sync_post_strategies(req: Request):
 
 
 @app.post("/api/cloud/sync-now")
-def api_cloud_sync_now():
+def api_cloud_sync_now(req: Request):
+    _require_local_admin(req)
     res = _sync_strategies_bidirectional()
     return JSONResponse(_clean_json({
         "ok": True,
@@ -2178,6 +2218,7 @@ def api_cloud_sync_now():
 
 @app.post("/api/cloud/github-deploy")
 async def api_cloud_github_deploy(req: Request):
+    _require_local_admin(req)
     body = await req.json()
     saved = _load_cloud_config()
     gh_token = str(body.get("gh_token") or saved.get("gh_token") or "").strip()

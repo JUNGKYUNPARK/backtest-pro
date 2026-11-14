@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261114_3" />
 </head>
 <body class="simple-mode">
   <!-- 상단 글로벌 헤더 & 원클릭 시나리오 바 -->
@@ -53,7 +53,7 @@
         <span class="toggle-label">⚡ 자동실행</span>
       </label>
 
-      <button class="btn btn-outline btn-sm" id="btn-open-access" title="모바일 QR 스캔 및 외부 인터넷 접속 링크 생성">📱 모바일·외부접속</button>
+      <button class="btn btn-outline btn-sm hidden" id="btn-open-access" title="이 메뉴는 내 PC(localhost)에서만 보이며 외부·모바일·Render 접속자에게는 숨겨집니다">🔒 모바일·외부접속 (내 PC 전용)</button>
       <button class="btn btn-outline btn-sm simple-hide" id="btn-top-compare" title="현재 종목으로 13개 대표 전략을 한 번에 비교">🏆 13전략 대결</button>
       <button class="btn btn-outline btn-sm simple-hide" id="btn-top-optimize" title="현재 수식/전략의 최적 숫자를 자동 탐색">🔬 숫자 최적화</button>
       <button class="btn btn-primary" id="btn-run-backtest" title="단축키: Ctrl + Enter">🚀 즉시 실행</button>
@@ -540,9 +540,16 @@
                 <button class="seg-btn" data-ezoom="3Y">3년</button>
                 <button class="seg-btn active" data-ezoom="ALL">전체</button>
               </div>
-              <div class="seg-group" id="chart-unit-group">
-                <button class="seg-btn active" data-unit="pct">수익률 %</button>
-                <button class="seg-btn" data-unit="krw">원화 (₩)</button>
+              <div class="seg-group" id="chart-unit-group" title="선차트(수익률/원화) 또는 매수·매도 타점이 표시된 주가 봉차트(캔들)로 전환합니다">
+                <button class="seg-btn active" data-unit="pct">📈 수익률 %</button>
+                <button class="seg-btn" data-unit="krw">💰 원화 (₩)</button>
+                <button class="seg-btn" data-unit="candle">🕯️ 봉차트(타점)</button>
+              </div>
+              <div class="seg-group hidden" id="equity-tf-group" title="봉차트 시간축 단위">
+                <button class="seg-btn active" data-etf="auto">자동</button>
+                <button class="seg-btn" data-etf="D">일봉</button>
+                <button class="seg-btn" data-etf="W">🟦 주봉</button>
+                <button class="seg-btn" data-etf="M">🟧 월봉</button>
               </div>
               <select id="equity-index-overlay" class="ext-filter-select" title="메인 차트 위에 국가 대표지수를 함께 겹쳐 봅니다">
                 <option value="">🌍 국가지수 겹치기: 없음</option>
@@ -563,7 +570,7 @@
               <button type="button" class="btn btn-outline btn-xs" id="btn-fullscreen-equity" title="차트 전체화면 확대/축소">⛶ 크게</button>
             </div>
           </div>
-          <div id="chart-equity" class="plotly-box" style="height: 430px;"></div>
+          <div id="chart-equity" class="plotly-box" style="height: 580px;"></div>
         </div>
 
         <!-- 🌍 국가지수 & 주요사건 매핑 타임라인 (간편모드 필수 카드) -->
@@ -579,9 +586,10 @@
                 <button type="button" class="seg-btn" data-ni="^SOX">🇺🇸 반도체</button>
                 <button type="button" class="seg-btn" data-ni="^N225">🇯🇵 닛케이</button>
               </div>
-              <div class="seg-group" id="ni-unit-group" title="지수 Y축 표시 단위">
-                <button type="button" class="seg-btn active" data-niunit="price">지수 포인트</button>
-                <button type="button" class="seg-btn" data-niunit="pct">수익률 %</button>
+              <div class="seg-group" id="ni-unit-group" title="지수 표시 형태(선/봉) 및 Y축 단위">
+                <button type="button" class="seg-btn active" data-niunit="price">📈 지수(선)</button>
+                <button type="button" class="seg-btn" data-niunit="candle">🕯️ 지수(봉)</button>
+                <button type="button" class="seg-btn" data-niunit="pct">📊 수익률 %</button>
               </div>
               <select id="ni-event-filter" class="ext-filter-select" title="표시할 사건 유형 선택">
                 <option value="all">전체 주요사건 + 지수뉴스</option>
@@ -595,7 +603,7 @@
           <div class="ni-summary-strip" id="ni-summary-strip">
             <span class="ni-stat-muted">국가지수 데이터 로딩 중...</span>
           </div>
-          <div id="chart-national-index" class="plotly-box" style="height: 360px;"></div>
+          <div id="chart-national-index" class="plotly-box" style="height: 500px;"></div>
           <div class="ni-events-wrap">
             <div class="ni-events-head">
               <span>📌 사건 시점 지수 위치 · 이후 1개월/3개월 수익률 임팩트 (클릭 시 차트 확대)</span>
@@ -687,7 +695,7 @@
               <button type="button" class="btn btn-outline btn-xs" id="btn-fullscreen-candle" title="캔들 차트 전체화면 확대/축소">⛶ 크게</button>
             </div>
           </div>
-          <div id="chart-candle" class="plotly-box" style="height: 460px;"></div>
+          <div id="chart-candle" class="plotly-box" style="height: 640px;"></div>
         </div>
 
         <div class="grid-2">
@@ -918,6 +926,10 @@
         <button type="button" class="btn btn-ghost btn-sm" id="btn-close-access">✕ 닫기</button>
       </div>
 
+      <div id="access-local-only-banner" style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.35);color:#A7F3D0;font-size:12px;">
+        🔒 <strong>내 PC(localhost) 전용 보안 작동 중:</strong> 현재 서버가 켜진 내 PC(<code>localhost</code>)에서 접속했기 때문에 이 메뉴가 보입니다. 외부 주소(<code>onrender.com</code>, <code>trycloudflare.com</code>, 휴대폰·외부 PC)로 접속할 때는 상단 버튼 자체가 사라지고 설정 API 접근도 차단(<code>403</code>)됩니다.
+      </div>
+
       <div class="access-grid">
         <!-- 외부 인터넷 HTTPS 터널 -->
         <div class="access-card">
@@ -1015,6 +1027,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=20261114_3"></script>
 </body>
 </html>

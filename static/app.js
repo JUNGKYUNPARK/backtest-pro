@@ -98,6 +98,7 @@ function restoreFromUrlHash() {
     if (obj.ctf) {
       state.candleTf = obj.ctf;
       $$('#candle-tf-group .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.ctf === obj.ctf));
+      $$('#equity-tf-group .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.etf === obj.ctf));
     }
     setStatus('🔗 공유 링크에서 수식을 복원했습니다', 'ok');
     return true;
@@ -305,6 +306,43 @@ function shiftDateDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
+function computeVisibleOhlcRange(dates, highs, lows, zoomMode, tf = 'D') {
+  const nBars = Array.isArray(dates) ? dates.length : 0;
+  if (!nBars) return null;
+  let startIdx = 0;
+  if (zoomMode === 'LAST_140') {
+    if (nBars > 160) startIdx = nBars - 140;
+  } else if (zoomMode === 'AUTO') {
+    const cap = isMobileView() ? 75 : 150;
+    if (nBars > cap) startIdx = nBars - cap;
+  } else if (zoomMode && zoomMode !== 'ALL' && nBars > 10) {
+    const daysBack = zoomMode === '3M' ? 92 : (zoomMode === '6M' ? 184 : (zoomMode === '1Y' ? 366 : 1096));
+    const cutoff = shiftDateDays(dates[nBars - 1], -daysBack);
+    const found = dates.findIndex((d) => d >= cutoff);
+    if (found > 0) startIdx = found;
+  }
+  if (startIdx > 0 && nBars - startIdx < 12) {
+    startIdx = Math.max(0, nBars - 12);
+  }
+  if (startIdx <= 0 || startIdx >= nBars) return null;
+  const padDays = tf === 'M' ? 20 : (tf === 'W' ? 7 : 2);
+  const xRange = [dates[startIdx], shiftDateDays(dates[nBars - 1], padDays)];
+  let yLo = Infinity;
+  let yHi = -Infinity;
+  for (let i = startIdx; i < nBars; i += 1) {
+    const lo = Number(lows[i]);
+    const hi = Number(highs[i]);
+    if (Number.isFinite(lo) && lo < yLo) yLo = lo;
+    if (Number.isFinite(hi) && hi > yHi) yHi = hi;
+  }
+  let yRange = null;
+  if (Number.isFinite(yLo) && Number.isFinite(yHi) && yHi >= yLo) {
+    const pad = Math.max((yHi - yLo) * 0.1, yHi * 0.015);
+    yRange = [yLo - pad, yHi + pad];
+  }
+  return { xRange, yRange };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 포맷터 & 유틸
 // ═══════════════════════════════════════════════════════════════
@@ -475,7 +513,22 @@ async function refreshAccessInfo() {
   }
 }
 
+function isLocalAdminClient() {
+  const h = (window.location.hostname || '').toLowerCase();
+  const isLocalHost = h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+  if (!isLocalHost) return false;
+  return Boolean(state.init && state.init.is_local_admin === true);
+}
+
+function updateAccessButtonVisibility() {
+  const allow = isLocalAdminClient();
+  const btn = $('#btn-open-access');
+  if (btn) btn.classList.toggle('hidden', !allow);
+  if (!allow) $('#access-modal')?.classList.add('hidden');
+}
+
 async function openAccessModal() {
+  if (!isLocalAdminClient()) return;
   $('#access-modal').classList.remove('hidden');
   await Promise.all([refreshAccessInfo(), refreshCloudConfig()]);
 }
@@ -681,10 +734,12 @@ async function togglePublicTunnel() {
 
 async function initApp() {
   try {
+    updateAccessButtonVisibility();
     setMobilePane(isMobileView() ? 'right' : 'left', 'summary');
     setStatus('⏳ 데이터 준비 중...', 'loading');
     const data = await apiJson('/api/init');
     state.init = data;
+    updateAccessButtonVisibility();
 
     const endEl = $('#end-date');
     if (endEl && !endEl.value) endEl.value = data.today;
@@ -1760,70 +1815,127 @@ function renderVerdictAndKpis(data) {
 function renderEquityChart(data) {
   const s = data.series;
   if (!s || !s.dates || !s.dates.length) return;
+  const c = data.candle;
+  const hasCandle = !!(c && Array.isArray(c.dates) && c.dates.length);
+  const isCandle = state.chartUnit === 'candle' && hasCandle;
   const isPct = state.chartUnit === 'pct';
   const useLog = $('#chart-log-scale').checked;
 
-  const yStrat = isPct ? s.equity_pct : s.equity;
-  const yBench = isPct ? s.benchmark_pct : s.benchmark;
+  $('#equity-tf-group')?.classList.toggle('hidden', state.chartUnit !== 'candle');
 
-  const traces = [
-    {
-      x: s.dates, y: yBench, name: s.benchmark_name || '그냥 보유',
-      type: 'scatter', mode: 'lines',
-      line: { color: '#64748B', width: 1.7, dash: 'dot' },
-      xaxis: 'x', yaxis: 'y',
-    },
-    {
-      x: s.dates, y: yStrat, name: '내 전략',
-      type: 'scatter', mode: 'lines',
-      line: { color: '#00D084', width: 2.5 },
-      fill: 'tozeroy', fillcolor: 'rgba(0,208,132,0.08)',
-      xaxis: 'x', yaxis: 'y',
-    },
-    {
+  let traces = [];
+  if (isCandle) {
+    const tfName = c.tf === 'M' ? '월봉' : (c.tf === 'W' ? '주봉' : '일봉');
+    traces = [
+      {
+        x: c.dates, open: c.open, high: c.high, low: c.low, close: c.close,
+        type: 'candlestick', name: `${c.ticker} (${tfName})`,
+        increasing: { line: { color: '#00D084' }, fillcolor: 'rgba(0,208,132,0.85)' },
+        decreasing: { line: { color: '#FF4D4F' }, fillcolor: 'rgba(255,77,79,0.85)' },
+        xaxis: 'x', yaxis: 'y',
+      },
+      { x: c.dates, y: c.ma20, name: 'MA(20)', type: 'scatter', mode: 'lines', line: { color: 'rgba(245,176,65,0.6)', width: 1.2 }, xaxis: 'x', yaxis: 'y' },
+      { x: c.dates, y: c.ma60, name: 'MA(60)', type: 'scatter', mode: 'lines', line: { color: 'rgba(139,92,246,0.6)', width: 1.2 }, xaxis: 'x', yaxis: 'y' },
+    ];
+    const ovColors = ['#38BDF8', '#F472B6', '#FACC15', '#34D399', '#FB923C'];
+    (c.custom_overlays || []).forEach((ov, idx) => {
+      traces.push({
+        x: c.dates, y: ov.values, name: `📐 ${ov.name}`,
+        type: 'scatter', mode: 'lines',
+        line: { color: ovColors[idx % ovColors.length], width: 2.0 },
+        xaxis: 'x', yaxis: 'y',
+      });
+    });
+    if (c.buys && c.buys.length) {
+      traces.push({
+        x: c.buys.map((b) => b.date),
+        y: c.buys.map((b) => b.price),
+        mode: 'markers', name: '매수 ▲',
+        marker: { symbol: 'triangle-up', size: 11, color: '#00E676', line: { color: '#052E16', width: 1 } },
+        text: c.buys.map((b) => `매수 ${Math.round(b.price).toLocaleString()}원 (${b.shares}주 · ${b.raw_date || b.date})`),
+        xaxis: 'x', yaxis: 'y',
+      });
+    }
+    if (c.sells && c.sells.length) {
+      traces.push({
+        x: c.sells.map((sl) => sl.date),
+        y: c.sells.map((sl) => sl.price),
+        mode: 'markers', name: '매도 ▼',
+        marker: { symbol: 'triangle-down', size: 11, color: '#FF4D4F', line: { color: '#450A0A', width: 1 } },
+        text: c.sells.map((sl) => `매도 ${Math.round(sl.price).toLocaleString()}원 (${sl.return_pct.toFixed(1)}% · ${sl.reason} · ${sl.raw_date || sl.date})`),
+        xaxis: 'x', yaxis: 'y',
+      });
+    }
+    traces.push({
       x: s.dates, y: s.drawdown, name: '전략 낙폭(MDD)',
       type: 'scatter', mode: 'lines',
       line: { color: '#FF4D4F', width: 1.5 },
       fill: 'tozeroy', fillcolor: 'rgba(255,77,79,0.16)',
       xaxis: 'x', yaxis: 'y2',
-    },
-  ];
-  if (s.bench_dd && s.bench_dd.length) {
-    traces.push({
-      x: s.dates, y: s.bench_dd, name: '보유 낙폭',
-      type: 'scatter', mode: 'lines',
-      line: { color: '#94A3B8', width: 1, dash: 'dot' },
-      xaxis: 'x', yaxis: 'y2',
     });
-  }
+  } else {
+    const yStrat = isPct ? s.equity_pct : s.equity;
+    const yBench = isPct ? s.benchmark_pct : s.benchmark;
 
-  const ov = state.equityOverlayIndexData;
-  if (state.equityOverlayIndexSymbol && ov && ov.series && Array.isArray(ov.series.dates) && ov.series.dates.length) {
-    const initCap = Number($('#initial-capital')?.value || 10000000);
-    const yOv = isPct
-      ? ov.series.pct
-      : ov.series.pct.map((p) => Math.round(initCap * (1 + Number(p || 0) / 100)));
-    traces.push({
-      x: ov.series.dates,
-      y: yOv,
-      name: `${ov.flag || '🌍'} ${ov.short || ov.symbol} 국가지수`,
-      type: 'scatter',
-      mode: 'lines',
-      line: { color: '#F59E0B', width: 2.0 },
-      xaxis: 'x',
-      yaxis: 'y',
-    });
-    if (Array.isArray(ov.series.drawdown) && ov.series.drawdown.length) {
+    traces = [
+      {
+        x: s.dates, y: yBench, name: s.benchmark_name || '그냥 보유',
+        type: 'scatter', mode: 'lines',
+        line: { color: '#64748B', width: 1.7, dash: 'dot' },
+        xaxis: 'x', yaxis: 'y',
+      },
+      {
+        x: s.dates, y: yStrat, name: '내 전략',
+        type: 'scatter', mode: 'lines',
+        line: { color: '#00D084', width: 2.5 },
+        fill: 'tozeroy', fillcolor: 'rgba(0,208,132,0.08)',
+        xaxis: 'x', yaxis: 'y',
+      },
+      {
+        x: s.dates, y: s.drawdown, name: '전략 낙폭(MDD)',
+        type: 'scatter', mode: 'lines',
+        line: { color: '#FF4D4F', width: 1.5 },
+        fill: 'tozeroy', fillcolor: 'rgba(255,77,79,0.16)',
+        xaxis: 'x', yaxis: 'y2',
+      },
+    ];
+    if (s.bench_dd && s.bench_dd.length) {
+      traces.push({
+        x: s.dates, y: s.bench_dd, name: '보유 낙폭',
+        type: 'scatter', mode: 'lines',
+        line: { color: '#94A3B8', width: 1, dash: 'dot' },
+        xaxis: 'x', yaxis: 'y2',
+      });
+    }
+
+    const ov = state.equityOverlayIndexData;
+    if (state.equityOverlayIndexSymbol && ov && ov.series && Array.isArray(ov.series.dates) && ov.series.dates.length) {
+      const initCap = Number($('#initial-capital')?.value || 10000000);
+      const yOv = isPct
+        ? ov.series.pct
+        : ov.series.pct.map((p) => Math.round(initCap * (1 + Number(p || 0) / 100)));
       traces.push({
         x: ov.series.dates,
-        y: ov.series.drawdown,
-        name: `${ov.short || ov.symbol} 낙폭`,
+        y: yOv,
+        name: `${ov.flag || '🌍'} ${ov.short || ov.symbol} 국가지수`,
         type: 'scatter',
         mode: 'lines',
-        line: { color: '#F59E0B', width: 1.1, dash: 'dot' },
+        line: { color: '#F59E0B', width: 2.0 },
         xaxis: 'x',
-        yaxis: 'y2',
+        yaxis: 'y',
       });
+      if (Array.isArray(ov.series.drawdown) && ov.series.drawdown.length) {
+        traces.push({
+          x: ov.series.dates,
+          y: ov.series.drawdown,
+          name: `${ov.short || ov.symbol} 낙폭`,
+          type: 'scatter',
+          mode: 'lines',
+          line: { color: '#F59E0B', width: 1.1, dash: 'dot' },
+          xaxis: 'x',
+          yaxis: 'y2',
+        });
+      }
     }
   }
 
@@ -1832,23 +1944,23 @@ function renderEquityChart(data) {
     grid: { rows: 2, columns: 1, pattern: 'coupled', roworder: 'top to bottom' },
     yaxis: {
       ...PLOT_LAYOUT_BASE.yaxis,
-      domain: [0.32, 1.0],
-      title: isPct ? '수익률 (%)' : '평가자산 (원)',
-      type: (!isPct && useLog) ? 'log' : 'linear',
+      domain: [0.26, 1.0],
+      title: isCandle ? '주가 (봉차트)' : (isPct ? '수익률 (%)' : '평가자산 (원)'),
+      type: ((!isPct && !isCandle && useLog) || (isCandle && useLog)) ? 'log' : 'linear',
     },
     yaxis2: {
       ...PLOT_LAYOUT_BASE.yaxis,
-      domain: [0.0, 0.25],
+      domain: [0.0, 0.20],
       title: '낙폭 (%)',
     },
-    xaxis: { ...PLOT_LAYOUT_BASE.xaxis, anchor: 'y2' },
+    xaxis: { ...PLOT_LAYOUT_BASE.xaxis, anchor: 'y2', ...(isCandle ? { rangeslider: { visible: false } } : {}) },
     shapes: [],
     annotations: [],
   };
 
   const eqEl = $('#chart-equity');
   if (eqEl && !$('#equity-card')?.classList.contains('chart-fullscreen-card')) {
-    eqEl.style.height = isMobileView() ? '330px' : '430px';
+    eqEl.style.height = isMobileView() ? '350px' : '580px';
   }
 
   if ($('#chart-show-events')?.checked) {
@@ -1894,7 +2006,7 @@ function renderEquityChart(data) {
         yref: 'paper',
         x0: ev.date,
         x1: ev.date,
-        y0: 0.32,
+        y0: 0.26,
         y1: 1.0,
         line: { color: col, width: isStock ? 1.5 : 1.1, dash: isStock ? 'dashdot' : 'dot' },
       });
@@ -1930,7 +2042,14 @@ function renderEquityChart(data) {
   }
 
   const zEq = state.equityZoom || 'ALL';
-  if (zEq !== 'ALL' && s.dates.length > 5) {
+  if (isCandle) {
+    const candleMode = zEq === 'ALL' ? 'LAST_140' : zEq;
+    const rng = computeVisibleOhlcRange(c.dates, c.high, c.low, candleMode, c.tf || 'D');
+    if (rng) {
+      layout.xaxis.range = rng.xRange;
+      if (rng.yRange && !useLog) layout.yaxis.range = rng.yRange;
+    }
+  } else if (zEq !== 'ALL' && s.dates.length > 5) {
     const eqDays = zEq === '6M' ? 184 : zEq === '1Y' ? 366 : 1096;
     const eqCut = shiftDateDays(s.dates[s.dates.length - 1], -eqDays);
     if (eqCut > s.dates[0]) {
@@ -2058,6 +2177,7 @@ function renderNationalIndexSection() {
   const s = data.series;
   const sum = data.summary || {};
   const isPct = state.nationalIndexUnit === 'pct';
+  const isCandle = state.nationalIndexUnit === 'candle' && Array.isArray(s.opens) && s.opens.length > 0;
   const filteredEvs = getFilteredNationalIndexEvents(data);
 
   const strip = $('#ni-summary-strip');
@@ -2076,25 +2196,39 @@ function renderNationalIndexSection() {
     if (rstBtn) {
       rstBtn.onclick = () => {
         const el = document.getElementById('chart-national-index');
-        if (el) Plotly.relayout(el, { 'xaxis.autorange': true });
+        if (el) Plotly.relayout(el, { 'xaxis.autorange': true, 'yaxis.autorange': true });
       };
     }
   }
 
   const yVals = isPct ? s.pct : s.closes;
   const traces = [
-    {
-      x: s.dates,
-      y: yVals,
-      name: `${data.short || data.symbol}`,
-      type: 'scatter',
-      mode: 'lines',
-      line: { color: '#38BDF8', width: 2.2 },
-      fill: 'tozeroy',
-      fillcolor: 'rgba(56, 189, 248, 0.08)',
-      xaxis: 'x',
-      yaxis: 'y',
-    },
+    isCandle
+      ? {
+          x: s.dates,
+          open: s.opens,
+          high: s.highs,
+          low: s.lows,
+          close: s.closes,
+          name: `${data.short || data.symbol} (봉)`,
+          type: 'candlestick',
+          increasing: { line: { color: '#00D084', width: 1 }, fillcolor: '#00D084' },
+          decreasing: { line: { color: '#FF4D4F', width: 1 }, fillcolor: '#FF4D4F' },
+          xaxis: 'x',
+          yaxis: 'y',
+        }
+      : {
+          x: s.dates,
+          y: yVals,
+          name: `${data.short || data.symbol}`,
+          type: 'scatter',
+          mode: 'lines',
+          line: { color: '#38BDF8', width: 2.2 },
+          fill: 'tozeroy',
+          fillcolor: 'rgba(56, 189, 248, 0.08)',
+          xaxis: 'x',
+          yaxis: 'y',
+        },
     {
       x: s.dates,
       y: s.drawdown,
@@ -2145,15 +2279,19 @@ function renderNationalIndexSection() {
     grid: { rows: 2, columns: 1, pattern: 'coupled', roworder: 'top to bottom' },
     yaxis: {
       ...PLOT_LAYOUT_BASE.yaxis,
-      domain: [0.30, 1.0],
+      domain: [0.25, 1.0],
       title: isPct ? '누적 수익률 (%)' : '지수 포인트',
     },
     yaxis2: {
       ...PLOT_LAYOUT_BASE.yaxis,
-      domain: [0.0, 0.23],
+      domain: [0.0, 0.19],
       title: '낙폭 (%)',
     },
-    xaxis: { ...PLOT_LAYOUT_BASE.xaxis, anchor: 'y2' },
+    xaxis: {
+      ...PLOT_LAYOUT_BASE.xaxis,
+      anchor: 'y2',
+      ...(isCandle ? { rangeslider: { visible: false } } : {}),
+    },
     shapes: [],
     annotations: [],
   };
@@ -2169,7 +2307,7 @@ function renderNationalIndexSection() {
       yref: 'paper',
       x0: dt,
       x1: dt,
-      y0: 0.30,
+      y0: 0.25,
       y1: 1.0,
       line: { color: col, width: isShock ? 1.4 : 1.1, dash: isShock ? 'dashdot' : 'dot' },
     });
@@ -2192,9 +2330,16 @@ function renderNationalIndexSection() {
     });
   });
 
+  if (isCandle) {
+    const rng = computeVisibleOhlcRange(s.dates, s.highs, s.lows, 'LAST_140', 'D');
+    if (rng) {
+      layout.xaxis.range = rng.xRange;
+      if (rng.yRange) layout.yaxis.range = rng.yRange;
+    }
+  }
   const niEl = document.getElementById('chart-national-index');
   if (niEl && !$('#national-index-card')?.classList.contains('chart-fullscreen-card')) {
-    niEl.style.height = isMobileView() ? '300px' : '360px';
+    niEl.style.height = isMobileView() ? '320px' : '500px';
   }
   Plotly.react('chart-national-index', traces, buildPlotLayout(layout), buildPlotCfg());
 
@@ -2426,7 +2571,7 @@ function renderCandleAndTrades(data) {
     const hasOsc = Array.isArray(c.oscillators) && c.oscillators.length > 0;
     const candleEl = $('#chart-candle');
     if (candleEl && !$('#candle-card')?.classList.contains('chart-fullscreen-card')) {
-      candleEl.style.height = isMobileView() ? (hasOsc ? '420px' : '370px') : (hasOsc ? '540px' : '460px');
+      candleEl.style.height = isMobileView() ? (hasOsc ? '420px' : '370px') : (hasOsc ? '700px' : '640px');
     }
 
     const volAxisY = hasOsc ? 'y3' : 'y2';
@@ -2518,36 +2663,10 @@ function renderCandleAndTrades(data) {
       yaxis2: { ...PLOT_LAYOUT_BASE.yaxis, domain: [0.0, 0.18], title: '거래량' },
     };
 
-    const nBars = c.dates.length;
-    const zMode = state.candleZoom || 'AUTO';
-    let startIdx = 0;
-    if (zMode === 'AUTO') {
-      const cap = isMobileView() ? 75 : 150;
-      if (nBars > cap) startIdx = nBars - cap;
-    } else if (zMode !== 'ALL' && nBars > 10) {
-      const daysBack = zMode === '3M' ? 92 : zMode === '6M' ? 184 : 366;
-      const cutoff = shiftDateDays(c.dates[nBars - 1], -daysBack);
-      const found = c.dates.findIndex((d) => d >= cutoff);
-      if (found > 0) startIdx = found;
-    }
-    if (startIdx > 0 && nBars - startIdx < 12) {
-      startIdx = Math.max(0, nBars - 12);
-    }
-    if (startIdx > 0 && startIdx < nBars) {
-      const endDatePad = shiftDateDays(c.dates[nBars - 1], c.tf === 'M' ? 20 : c.tf === 'W' ? 7 : 2);
-      candleLayout.xaxis.range = [c.dates[startIdx], endDatePad];
-      let yLo = Infinity;
-      let yHi = -Infinity;
-      for (let i = startIdx; i < nBars; i += 1) {
-        const lo = Number(c.low[i]);
-        const hi = Number(c.high[i]);
-        if (Number.isFinite(lo) && lo < yLo) yLo = lo;
-        if (Number.isFinite(hi) && hi > yHi) yHi = hi;
-      }
-      if (Number.isFinite(yLo) && Number.isFinite(yHi) && yHi >= yLo) {
-        const pad = Math.max((yHi - yLo) * 0.1, yHi * 0.015);
-        candleLayout.yaxis.range = [yLo - pad, yHi + pad];
-      }
+    const rng = computeVisibleOhlcRange(c.dates, c.high, c.low, state.candleZoom || 'AUTO', c.tf || 'D');
+    if (rng) {
+      candleLayout.xaxis.range = rng.xRange;
+      if (rng.yRange) candleLayout.yaxis.range = rng.yRange;
     }
 
     Plotly.react('chart-candle', traces, buildPlotLayout(candleLayout), buildPlotCfg());
@@ -3500,11 +3619,23 @@ function bindEvents() {
       if (state.lastResult) renderEquityChart(state.lastResult);
     };
   }
+  const syncTfButtons = (tf) => {
+    $$('#candle-tf-group .seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.ctf === tf));
+    $$('#equity-tf-group .seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.etf === tf));
+  };
   $$('#candle-tf-group .seg-btn').forEach((b) => {
     b.onclick = () => {
-      $$('#candle-tf-group .seg-btn').forEach((x) => x.classList.remove('active'));
-      b.classList.add('active');
-      state.candleTf = b.dataset.ctf || 'auto';
+      const tf = b.dataset.ctf || 'auto';
+      syncTfButtons(tf);
+      state.candleTf = tf;
+      runBacktest();
+    };
+  });
+  $$('#equity-tf-group .seg-btn').forEach((b) => {
+    b.onclick = () => {
+      const tf = b.dataset.etf || 'auto';
+      syncTfButtons(tf);
+      state.candleTf = tf;
       runBacktest();
     };
   });
