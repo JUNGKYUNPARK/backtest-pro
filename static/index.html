@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=20261114_3" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261114_4" />
 </head>
 <body class="simple-mode">
   <!-- 상단 글로벌 헤더 & 원클릭 시나리오 바 -->
@@ -612,6 +612,33 @@
           </div>
         </div>
 
+        <div class="panel-card chart-card" id="us-guru-card">
+          <div class="section-head-row">
+            <div>
+              <h2>🦅 미국 유명인 · 월가 구루 최근 매수 종목 &amp; 세부 공시</h2>
+              <p class="section-desc">버크셔(13F)·미 의회(STOCK Act)·ARK 일간 매매·헤지펀드 공시 기반 최근 주목 매수 종목과 실시간 수익률·매수 근거를 확인하고 원클릭 백테스트로 검증하세요.</p>
+            </div>
+            <div class="chart-toolbar">
+              <div class="seg-group seg-group-wrap" id="guru-chip-group">
+                <button class="seg-btn active" data-guru="all">전체 구루</button>
+                <button class="seg-btn" data-guru="buffett">워런 버핏</button>
+                <button class="seg-btn" data-guru="pelosi">낸시 펠로시</button>
+                <button class="seg-btn" data-guru="cathie">캐시 우드</button>
+                <button class="seg-btn" data-guru="druckenmiller">드러켄밀러</button>
+                <button class="seg-btn" data-guru="ackman">빌 애크먼</button>
+                <button class="seg-btn" data-guru="burry">마이클 버리</button>
+              </div>
+              <button class="ghost-btn sm-btn" id="btn-guru-run-basket" title="선택된 구루의 매수 종목들로 즉시 백테스트 실행">🚀 필터 종목 바스켓 테스트</button>
+            </div>
+          </div>
+
+          <div id="guru-summary-strip" class="guru-summary-strip">
+            <div class="sub-empty">미국 유명 투자자 공시 및 실시간 주가 데이터를 불러오는 중...</div>
+          </div>
+
+          <div id="guru-picks-grid" class="guru-picks-grid"></div>
+        </div>
+
         <details class="panel-card deep-diag-details" id="summary-deep-details">
           <summary class="deep-diag-summary">🩺 AI 전략 코치 상세 진단 · 5대 균형 레이더 · 18개 퀀트 성적표 펼쳐보기</summary>
           <div class="deep-diag-body">
@@ -1027,6 +1054,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20261114_3"></script>
+  <script src="/static/app.js?v=20261114_4"></script>
 </body>
 </html>

@@ -1954,5 +1954,153 @@ details.deep-diag-details[open] > summary.deep-diag-summary::after {
   }
 }
 
+/* ══════════════ 미국 유명인 · 월가 구루 매수 트래커 ══════════════ */
+.guru-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.guru-picks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(315px, 1fr));
+  gap: 12px;
+}
+.guru-pick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(17, 25, 44, 0.96), rgba(11, 17, 32, 0.92));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.guru-pick-card:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  transform: translateY(-1px);
+}
+.guru-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.guru-stock-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.guru-ticker-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.guru-ticker-code {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+.guru-stock-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+.guru-sector-tag {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+.guru-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  white-space: nowrap;
+}
+.guru-action-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.guru-action-pill.new { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); }
+.guru-action-pill.add { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); }
+.guru-action-pill.call { background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.38); }
+.guru-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(9, 14, 26, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+.guru-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.guru-metric span {
+  font-size: 10px;
+  color: #64748b;
+}
+.guru-metric strong {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: #e2e8f0;
+}
+.guru-metric strong.pos { color: #34d399; }
+.guru-metric strong.neg { color: #fb7185; }
+.guru-detail-box {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.55);
+  border-left: 2px solid rgba(56, 189, 248, 0.5);
+  padding: 6px 9px;
+  border-radius: 0 7px 7px 0;
+}
+.guru-detail-box .guru-scale {
+  color: #38bdf8;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.guru-thesis-text {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+.guru-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+.guru-meta-date {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
 
 

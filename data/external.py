@@ -510,15 +510,37 @@ def fetch_point_in_time_shock_news(
                     picked.append((pd.Timestamp(dt), float(r)))
             shock_days = sorted(picked, key=lambda x: x[0])
 
-    cache_key = (t, q_name, date_key, max_events)
+    cache_key = ("kr_v2", t, q_name, date_key, max_events)
     now = time.time()
     with _LOCK:
         cached = _NEWS_CACHE.get(cache_key)
         if cached and (now - cached[0]) < cached[1]:
             return dict(cached[2])
 
-    # Google News 검색 키워드 (한국 종목명이 있으면 한글 이름 우선, 미국은 티커 + 회사 키워드)
-    search_term = q_name if (is_kr and q_name != t) else t
+    kr_query_map = {
+        "^KS11": "코스피 증시",
+        "^KQ11": "코스닥 증시",
+        "^GSPC": "뉴욕증시 S&P500",
+        "^IXIC": "뉴욕증시 나스닥",
+        "^SOX": "필라델피아 반도체지수",
+        "^N225": "일본 닛케이 증시",
+        "SPY": "뉴욕증시 S&P500",
+        "QQQ": "뉴욕증시 나스닥",
+        "TQQQ": "나스닥 기술주",
+        "SOXL": "미국 반도체주",
+        "NVDA": "엔비디아 주가",
+        "TSLA": "테슬라 주가",
+        "AAPL": "애플 주가",
+        "MSFT": "마이크로소프트 주가",
+        "AMZN": "아마존 주가",
+        "GOOGL": "구글 알파벳 주가",
+        "META": "메타 주가",
+        "AVGO": "브로드컴 주가",
+    }
+    has_hangul = bool(re.search(r"[가-힣]", q_name))
+    kr_search_term = kr_query_map.get(t) or (
+        f"{q_name} 증시" if t.startswith("^") else (q_name if has_hangul else f"{q_name} 미국주식 주가")
+    )
 
     def _query_for_day(pair: tuple[pd.Timestamp, float]) -> dict[str, Any]:
         dt, ret = pair
@@ -526,10 +548,16 @@ def fetch_point_in_time_shock_news(
         after_d = (dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         before_d = (dt + datetime.timedelta(days=2)).strftime("%Y-%m-%d")
         items = _fetch_google_news_rss(
-            f"{search_term} after:{after_d} before:{before_d}",
-            is_kr=is_kr,
+            f"{kr_search_term} after:{after_d} before:{before_d}",
+            is_kr=True,
             limit=2,
         )
+        if not items and not is_kr:
+            items = _fetch_google_news_rss(
+                f"{q_name} stock after:{after_d} before:{before_d}",
+                is_kr=False,
+                limit=2,
+            )
         top = items[0] if items else None
         arrow = "📈" if ret > 0 else "📉"
         if top:
@@ -559,7 +587,7 @@ def fetch_point_in_time_shock_news(
     latest_news: list[dict[str, Any]] = []
     try:
         with ThreadPoolExecutor(max_workers=6) as pool:
-            f_latest = pool.submit(_fetch_google_news_rss, f"{search_term} 주가" if is_kr else f"{search_term} stock", is_kr, 5)
+            f_latest = pool.submit(_fetch_google_news_rss, kr_search_term, True, 5)
             f_shocks = [pool.submit(_query_for_day, pair) for pair in shock_days]
             latest_news = f_latest.result()
             auto_events = [f.result() for f in f_shocks]

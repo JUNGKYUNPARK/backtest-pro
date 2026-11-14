@@ -32,6 +32,8 @@ const state = {
   nationalIndexFilter: 'all', // 'all' | 'kr' | 'macro' | 'shock'
   nationalIndexData: null,
   indexEventsCache: {},
+  guruData: null,
+  guruFilter: 'all',
   experiments: [],
   baselineExpId: null,
   expSeq: 1,
@@ -763,6 +765,7 @@ async function initApp() {
     }
     pushFormulaHistory();
     await inspectFormula(false);
+    loadUsGurus();
     await runBacktest();
   } catch (err) {
     setStatus('🔴 초기화 실패', 'error');
@@ -2296,7 +2299,7 @@ function renderNationalIndexSection() {
     annotations: [],
   };
 
-  const visForChart = isMobileView() ? filteredEvs.slice(-6) : filteredEvs.slice(-14);
+  const visForChart = isMobileView() ? filteredEvs.slice(-8) : filteredEvs;
   visForChart.forEach((ev, idx) => {
     const dt = ev.matched_date || ev.date;
     const col = evColors[ev.type] || 'rgba(148, 163, 184, 0.6)';
@@ -2315,7 +2318,7 @@ function renderNationalIndexSection() {
     layout.annotations.push({
       x: dt,
       xref: 'x',
-      y: isShock ? (0.98 - (idx % 2) * 0.085) : (0.81 - (idx % 3) * 0.09),
+      y: isShock ? (0.98 - (idx % 2) * 0.085) : (0.83 - (idx % 4) * 0.075),
       yref: 'paper',
       text: ev.label,
       hovertext: `${ev.date} · ${ev.full_title || ev.label}${r1}`,
@@ -2398,6 +2401,169 @@ function renderNationalIndexSection() {
   $$('.ni-zoom-btn[data-zoom-date]', tblBox).forEach((btn) => {
     btn.onclick = () => zoomNationalIndexToEvent(btn.dataset.zoomDate);
   });
+}
+
+async function loadUsGurus() {
+  const strip = $('#guru-summary-strip');
+  try {
+    const data = await apiJson('/api/us-gurus');
+    state.guruData = data;
+    renderUsGurusSection();
+  } catch (err) {
+    if (strip) {
+      strip.innerHTML = `<div class="sub-empty">미국 유명 투자자 매수 데이터를 불러오지 못했습니다 (${_extEsc(err.message)}).</div>`;
+    }
+  }
+}
+
+function _guruSignedPct(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  const n = Number(v);
+  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
+
+function renderUsGurusSection() {
+  const data = state.guruData;
+  const strip = $('#guru-summary-strip');
+  const grid = $('#guru-picks-grid');
+  if (!strip || !grid || !data) return;
+
+  const esc = (v) => _extEsc(v == null ? '' : String(v));
+  const gurus = data.gurus || [];
+  const allPicks = data.picks || [];
+  const activeFilter = state.guruFilter || 'all';
+
+  $$('#guru-chip-group .seg-btn').forEach((b) => {
+    b.classList.toggle('active', (b.dataset.guru || 'all') === activeFilter);
+  });
+
+  const filteredPicks = activeFilter === 'all'
+    ? allPicks
+    : allPicks.filter((p) => p.guru_id === activeFilter);
+
+  const activeGuru = gurus.find((g) => g.id === activeFilter);
+  if (activeGuru) {
+    const avgCls = activeGuru.avg_ret_pct == null ? '' : (activeGuru.avg_ret_pct >= 0 ? 'style="color:#34d399"' : 'style="color:#fb7185"');
+    strip.innerHTML = `
+      <span>${esc(activeGuru.badge)} <strong>${esc(activeGuru.name)}</strong> (${esc(activeGuru.org)}) — ${esc(activeGuru.style_ko)}</span>
+      <span>추적 ${activeGuru.pick_count}종목 · 평균 매수 대비 수익률 <strong ${avgCls}>${_guruSignedPct(activeGuru.avg_ret_pct)}</strong> · 기준 ${esc(data.updated_at || '-')}</span>
+    `;
+  } else {
+    const validRets = filteredPicks.map((p) => p.ret_since_buy_pct).filter((v) => v != null && !Number.isNaN(Number(v)));
+    const avgAll = validRets.length ? (validRets.reduce((a, b) => a + Number(b), 0) / validRets.length) : null;
+    const avgCls = avgAll == null ? '' : (avgAll >= 0 ? 'style="color:#34d399"' : 'style="color:#fb7185"');
+    strip.innerHTML = `
+      <span>🦅 추적 구루 <strong>${gurus.length}명</strong> · 공시 픽 <strong>${filteredPicks.length}종목</strong> · 매수 대비 평균 <strong ${avgCls}>${_guruSignedPct(avgAll)}</strong></span>
+      <span>${esc(data.note || '')} (갱신: ${esc(data.updated_at || '-')})</span>
+    `;
+  }
+
+  if (!filteredPicks.length) {
+    grid.innerHTML = '<div class="sub-empty">선택한 투자자의 최근 매수 공시 항목이 없습니다.</div>';
+    return;
+  }
+
+  grid.innerHTML = filteredPicks.map((p) => {
+    const actCls = p.action_type === 'add' ? 'add' : (p.action_type === 'call' ? 'call' : 'new');
+    const buyCls = p.ret_since_buy_pct == null ? '' : (Number(p.ret_since_buy_pct) >= 0 ? 'pos' : 'neg');
+    const m3Cls = p.ret_3m_pct == null ? '' : (Number(p.ret_3m_pct) >= 0 ? 'pos' : 'neg');
+    const ddCls = p.dd_from_high_pct == null ? '' : (Number(p.dd_from_high_pct) <= -20 ? 'neg' : '');
+    const estTxt = p.est_buy_price != null ? ` · 추정 매수가 $${Number(p.est_buy_price).toFixed(2)}` : '';
+    return `
+      <div class="guru-pick-card">
+        <div class="guru-card-top">
+          <div class="guru-stock-head">
+            <div class="guru-ticker-line">
+              <span class="guru-ticker-code">${esc(p.ticker)}</span>
+              <span class="guru-stock-name">${esc(p.name_ko)}</span>
+            </div>
+            <span class="guru-sector-tag">${esc(p.sector_ko)}</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span class="guru-badge">${esc(p.guru_badge)} ${esc(p.guru_name)}</span>
+            <span class="guru-action-pill ${actCls}">${esc(p.action_label)}</span>
+          </div>
+        </div>
+
+        <div class="guru-metrics-row">
+          <div class="guru-metric">
+            <span>현재가 (${esc(p.last_date || '-')})</span>
+            <strong>${p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '-'}</strong>
+          </div>
+          <div class="guru-metric">
+            <span>매수 대비</span>
+            <strong class="${buyCls}">${_guruSignedPct(p.ret_since_buy_pct)}</strong>
+          </div>
+          <div class="guru-metric">
+            <span>3개월 수익</span>
+            <strong class="${m3Cls}">${_guruSignedPct(p.ret_3m_pct)}</strong>
+          </div>
+          <div class="guru-metric">
+            <span>52주고점비</span>
+            <strong class="${ddCls}">${p.dd_from_high_pct != null ? Number(p.dd_from_high_pct).toFixed(1) + '%' : '-'}</strong>
+          </div>
+        </div>
+
+        <div class="guru-detail-box">
+          <div class="guru-scale">${esc(p.filing_source)} · ${esc(p.scale_info)}${esc(estTxt)}</div>
+          <div>${esc(p.detail_ko)}</div>
+        </div>
+
+        <div class="guru-thesis-text">💡 ${esc(p.thesis_ko)}</div>
+
+        <div class="guru-card-actions">
+          <button class="ghost-btn sm-btn" data-guru-run="${esc(p.ticker)}">🚀 바로 백테스트</button>
+          <button class="ghost-btn sm-btn" data-guru-add="${esc(p.ticker)}">➕ 종목 추가</button>
+          <span class="guru-meta-date">매수 ${esc(p.buy_date || '-')} · 공시 ${esc(p.filing_date || '-')}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $$('[data-guru-run]', grid).forEach((btn) => {
+    btn.onclick = () => {
+      const ticker = btn.dataset.guruRun;
+      if (ticker) _runGuruBacktest([ticker], `🦅 구루 픽 ${ticker} 단일 종목 백테스트를 실행합니다.`);
+    };
+  });
+
+  $$('[data-guru-add]', grid).forEach((btn) => {
+    btn.onclick = () => {
+      const ticker = btn.dataset.guruAdd;
+      if (!ticker) return;
+      addTicker(ticker);
+      const prev = btn.textContent;
+      btn.textContent = '✅ 추가됨';
+      setTimeout(() => { btn.textContent = prev; }, 1400);
+    };
+  });
+}
+
+function _runGuruBacktest(tickers, statusMsg) {
+  const uniq = [...new Set((tickers || []).filter(Boolean))];
+  if (!uniq.length) return;
+  setMode('strategy');
+  state.tickers = uniq;
+  const w = Math.round((100 / uniq.length) * 10) / 10;
+  state.allocWeights = Object.fromEntries(uniq.map((t) => [t, w]));
+  renderSelectedTickers();
+  renderAllocWeights();
+  setStatus(statusMsg, 'info');
+  runBacktest(true);
+  const topAnchor = $('#equity-card') || $('#tab-summary');
+  if (topAnchor && !isMobileView()) topAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function runGuruFilteredBasket() {
+  const picks = state.guruData?.picks || [];
+  const filtered = state.guruFilter === 'all'
+    ? picks
+    : picks.filter((p) => p.guru_id === state.guruFilter);
+  const uniq = [...new Set(filtered.map((p) => p.ticker).filter(Boolean))];
+  const label = state.guruFilter === 'all'
+    ? '전체 구루'
+    : ((state.guruData?.gurus || []).find((g) => g.id === state.guruFilter)?.name || state.guruFilter);
+  _runGuruBacktest(uniq, `🦅 ${label} 매수 바스켓(${uniq.length}종목) 백테스트를 실행합니다.`);
 }
 
 function renderRadarChart(data) {
@@ -3682,6 +3848,17 @@ function bindEvents() {
       state.nationalIndexFilter = $('#ni-event-filter').value || 'all';
       renderNationalIndexSection();
     };
+  }
+
+  // 미국 유명인 · 구루 매수 트래커 컨트롤
+  $$('#guru-chip-group .seg-btn').forEach((b) => {
+    b.onclick = () => {
+      state.guruFilter = b.dataset.guru || 'all';
+      renderUsGurusSection();
+    };
+  });
+  if ($('#btn-guru-run-basket')) {
+    $('#btn-guru-run-basket').onclick = () => runGuruFilteredBasket();
   }
 
   // 실험 보드 컨트롤
