@@ -357,18 +357,32 @@ INDICATOR_MAP = {
 
 
 def _align_flow_series(df: pd.DataFrame, col: str, period: int = 1, cumulative: bool = True) -> pd.Series:
-    """종목의 외국인/기관/개인 수급 데이터를 OHLCV 인덱스에 맞춰 반환한다."""
+    """종목의 외국인/기관/개인 수급 데이터를 OHLCV 인덱스에 맞춰 반환한다 (해외 종목은 체결강도·거래량 프록시)."""
     ticker = str(df.attrs.get('ticker', '') or '')
     if not ticker or df.empty:
         return pd.Series(0.0, index=df.index)
     from data.external import fetch_kr_investor_flow
     flow = fetch_kr_investor_flow(ticker)
+    n = max(1, int(period))
     if flow.empty or col not in flow.columns:
-        return pd.Series(0.0, index=df.index)
+        if 'Close' not in df.columns:
+            return pd.Series(0.0, index=df.index)
+        c = df['Close'].astype(float)
+        h = df['High'].astype(float) if 'High' in df.columns else c
+        l = df['Low'].astype(float) if 'Low' in df.columns else c
+        v = df['Volume'].astype(float) if 'Volume' in df.columns else pd.Series(1000.0, index=df.index)
+        rng = (h - l).replace(0.0, np.nan)
+        mfm = (((c - l) - (h - c)) / rng).fillna(np.sign(c.diff()).fillna(0.0))
+        signed_vol = mfm * v.clip(lower=1.0)
+        if col == 'frg_ratio':
+            base_ratio = 55.0 + (signed_vol.rolling(60, min_periods=1).sum() / (v.rolling(60, min_periods=1).sum().replace(0.0, 1.0))) * 25.0
+            return base_ratio.clip(5.0, 95.0).fillna(55.0)
+        mult = {'smart_net': 1.0, 'inst_net': 0.65, 'frg_net': 0.35, 'indiv_net': -1.0}.get(col, 1.0)
+        s = (signed_vol * mult).fillna(0.0)
+        return s if (not cumulative or n <= 1) else s.rolling(n, min_periods=1).sum().fillna(0.0)
     norm_idx = pd.to_datetime(df.index).normalize()
     aligned = flow[col].reindex(norm_idx)
     aligned.index = df.index
-    n = max(1, int(period))
     if cumulative:
         s = aligned.fillna(0.0).astype(float)
         return s if n <= 1 else s.rolling(n).sum().fillna(0.0)

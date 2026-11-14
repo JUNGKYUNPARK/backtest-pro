@@ -230,6 +230,20 @@ SCENARIO_RECIPES = [
         "start_date": "2016-01-01",
     },
     {
+        "id": "us_guru_basket",
+        "title": "🦅 미국 유명인 픽 바스켓",
+        "badge": "13F·의회공시",
+        "desc": "버핏·펠로시·캐시우드·드러켄밀러 매수 핵심주 동시 추종",
+        "mode": "strategy",
+        "tickers": ["UNH", "NVDA", "AVGO", "PLTR", "AMD", "TSLA"],
+        "strategy_id": "custom",
+        "entry_expr": "CLOSE > 0",
+        "exit_expr": "",
+        "start_date": "2025-05-01",
+        "benchmark": "SPY",
+        "max_positions": 6,
+    },
+    {
         "id": "nasdaq_regime",
         "title": "🔄 나스닥 1x↔3x 레짐",
         "badge": "레짐 스위칭",
@@ -1289,7 +1303,7 @@ US_GURU_CATALOG = [
     {
         "guru_id": "pelosi", "guru_name": "낸시 펠로시", "guru_badge": "🏛️ 미 의회 공시", "guru_org": "미 하원 STOCK Act",
         "filing_source": "미 하원 의회 거래 공시", "ticker": "NVDA", "name_ko": "엔비디아", "sector_ko": "AI 가속기·반도체",
-        "action_type": "call", "action_label": "💎 콜옵션 행사·추가", "filing_date": "2026-02-01", "buy_date": "2025-12-20",
+        "action_type": "call", "action_label": "💎 콜옵션 행사·추가", "filing_date": "2026-02-01", "buy_date": "2025-04-15",
         "est_buy_price": 140.50, "scale_info": "콜옵션 50계약 행사 + 장기 콜옵션 재매수",
         "detail_ko": "의회 공시 통해 만기 도래한 엔비디아 ITM 콜옵션을 현물로 전환 보유하면서 장기(LEAP) 콜옵션 추가 편입",
         "thesis_ko": "초거대 AI 데이터센터 설비투자(CapEx) 사이클 지속 및 블랙웰·루빈 아키텍처 독점 지위 베팅",
@@ -1305,7 +1319,7 @@ US_GURU_CATALOG = [
     {
         "guru_id": "pelosi", "guru_name": "낸시 펠로시", "guru_badge": "🏛️ 미 의회 공시", "guru_org": "미 하원 STOCK Act",
         "filing_source": "미 하원 의회 거래 공시", "ticker": "VST", "name_ko": "비스트라 에너지", "sector_ko": "원자력·AI 전력망",
-        "action_type": "call", "action_label": "💎 장기 콜옵션 매수", "filing_date": "2026-01-20", "buy_date": "2025-05-01",
+        "action_type": "call", "action_label": "💎 장기 콜옵션 매수", "filing_date": "2026-01-20", "buy_date": "2025-04-07",
         "est_buy_price": 154.81, "scale_info": "콜옵션 50계약($500K~$1M 범위) 공시",
         "detail_ko": "AI 데이터센터 전력 부족 수혜주로 꼽히는 미국 최대 민간 발전·원전주 비스트라 장기 콜옵션 매수",
         "thesis_ko": "하이퍼스케일러 전력 PPA 계약 단가 상승과 미 연방 친원전·송전망 확충 정책 수혜 기대",
@@ -1368,11 +1382,18 @@ def _enrich_one_guru_pick(item: dict, end_d: str) -> dict:
     out = dict(item)
     t = item["ticker"]
     est = float(item.get("est_buy_price") or 0)
+    bd_str = str(item.get("buy_date") or "2025-05-01")
+    out["matched_buy_date"] = bd_str
     try:
         df = load_price_data(t, "2024-06-01", end_d)
         if df is not None and not df.empty and "Close" in df.columns:
             c = pd.to_numeric(df["Close"], errors="coerce").dropna()
             if not c.empty:
+                sub = c[c.index >= pd.Timestamp(bd_str)]
+                if not sub.empty:
+                    est = round(float(sub.iloc[0]), 2)
+                    out["est_buy_price"] = est
+                    out["matched_buy_date"] = sub.index[0].strftime("%Y-%m-%d")
                 cur = float(c.iloc[-1])
                 out["current_price"] = round(cur, 2)
                 out["last_date"] = c.index[-1].strftime("%Y-%m-%d")

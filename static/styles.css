@@ -2101,6 +2101,83 @@ details.deep-diag-details[open] > summary.deep-diag-summary::after {
   font-size: 10.5px;
   color: #64748b;
 }
+.section-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+.section-head-row h2 {
+  margin: 0 0 3px 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+.section-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+.seg-group-wrap {
+  flex-wrap: wrap;
+}
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 7px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.ghost-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #ffffff;
+}
+.ghost-btn:active {
+  transform: translateY(1px);
+}
+.sm-btn {
+  padding: 5px 10px;
+  font-size: 11.5px;
+}
+.guru-btn-primary {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+.guru-btn-primary:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.75);
+  color: #ffffff;
+}
+.guru-btn-secondary {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.42);
+  color: #93c5fd;
+}
+.guru-btn-secondary:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.75);
+  color: #ffffff;
+}
+@media (max-width: 700px) {
+  .guru-picks-grid {
+    grid-template-columns: 1fr;
+  }
+  .guru-card-actions {
+    flex-wrap: wrap;
+  }
+}
 
 
 

@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=20261114_4" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261114_5" />
 </head>
 <body class="simple-mode">
   <!-- 상단 글로벌 헤더 & 원클릭 시나리오 바 -->
@@ -620,15 +620,16 @@
             </div>
             <div class="chart-toolbar">
               <div class="seg-group seg-group-wrap" id="guru-chip-group">
-                <button class="seg-btn active" data-guru="all">전체 구루</button>
-                <button class="seg-btn" data-guru="buffett">워런 버핏</button>
-                <button class="seg-btn" data-guru="pelosi">낸시 펠로시</button>
-                <button class="seg-btn" data-guru="cathie">캐시 우드</button>
-                <button class="seg-btn" data-guru="druckenmiller">드러켄밀러</button>
-                <button class="seg-btn" data-guru="ackman">빌 애크먼</button>
-                <button class="seg-btn" data-guru="burry">마이클 버리</button>
+                <button type="button" class="seg-btn active" data-guru="all">전체 구루</button>
+                <button type="button" class="seg-btn" data-guru="buffett">워런 버핏</button>
+                <button type="button" class="seg-btn" data-guru="pelosi">낸시 펠로시</button>
+                <button type="button" class="seg-btn" data-guru="cathie">캐시 우드</button>
+                <button type="button" class="seg-btn" data-guru="druckenmiller">드러켄밀러</button>
+                <button type="button" class="seg-btn" data-guru="ackman">빌 애크먼</button>
+                <button type="button" class="seg-btn" data-guru="burry">마이클 버리</button>
               </div>
-              <button class="ghost-btn sm-btn" id="btn-guru-run-basket" title="선택된 구루의 매수 종목들로 즉시 백테스트 실행">🚀 필터 종목 바스켓 테스트</button>
+              <button type="button" class="ghost-btn sm-btn guru-btn-primary" id="btn-guru-run-basket" title="선택된 구루의 매수 종목들을 매수일 기준으로 동시 보유 백테스트">🦅 필터 종목 매수추종 바스켓</button>
+              <button type="button" class="ghost-btn sm-btn guru-btn-secondary" id="btn-guru-strat-basket" title="선택된 구루의 매수 종목들에 일봉 추세·눌림목 수식을 적용해 백테스트">📊 필터 종목 타점전략 테스트</button>
             </div>
           </div>
 
@@ -1054,6 +1055,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20261114_4"></script>
+  <script src="/static/app.js?v=20261114_5"></script>
 </body>
 </html>

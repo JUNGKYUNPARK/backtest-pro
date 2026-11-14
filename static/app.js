@@ -801,6 +801,14 @@ async function applyRecipe(r, shouldRun = true) {
     state.tickers = [...r.tickers];
     renderSelectedTickers();
   }
+  if (r.benchmark) {
+    $('#benchmark-select').value = r.benchmark;
+  }
+  if (r.max_positions) {
+    $('#max-positions').value = r.max_positions;
+  } else if (r.tickers && r.tickers.length > 1) {
+    $('#max-positions').value = r.tickers.length;
+  }
   setMode(r.mode || 'strategy');
 
   if (r.mode === 'regime' && r.regime) {
@@ -2512,9 +2520,12 @@ function renderUsGurusSection() {
         <div class="guru-thesis-text">💡 ${esc(p.thesis_ko)}</div>
 
         <div class="guru-card-actions">
-          <button class="ghost-btn sm-btn" data-guru-run="${esc(p.ticker)}">🚀 바로 백테스트</button>
-          <button class="ghost-btn sm-btn" data-guru-add="${esc(p.ticker)}">➕ 종목 추가</button>
-          <span class="guru-meta-date">매수 ${esc(p.buy_date || '-')} · 공시 ${esc(p.filing_date || '-')}</span>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="ghost-btn sm-btn guru-btn-primary" data-guru-run="${esc(p.ticker)}" data-buy-date="${esc(p.matched_buy_date || p.buy_date || '2025-05-01')}" data-guru-name="${esc(p.guru_name)}">🦅 매수일 추종</button>
+            <button type="button" class="ghost-btn sm-btn guru-btn-secondary" data-guru-strat="${esc(p.ticker)}" data-guru-name="${esc(p.guru_name)}">📊 타점 백테스트</button>
+            <button type="button" class="ghost-btn sm-btn" data-guru-add="${esc(p.ticker)}">➕ 종목 추가</button>
+          </div>
+          <span class="guru-meta-date">매수 ${esc(p.matched_buy_date || p.buy_date || '-')} · 공시 ${esc(p.filing_date || '-')}</span>
         </div>
       </div>
     `;
@@ -2523,7 +2534,29 @@ function renderUsGurusSection() {
   $$('[data-guru-run]', grid).forEach((btn) => {
     btn.onclick = () => {
       const ticker = btn.dataset.guruRun;
-      if (ticker) _runGuruBacktest([ticker], `🦅 구루 픽 ${ticker} 단일 종목 백테스트를 실행합니다.`);
+      const buyDate = btn.dataset.buyDate || '2025-05-01';
+      const gName = btn.dataset.guruName || '구루';
+      if (ticker) {
+        _runGuruBacktest([ticker], {
+          modeType: 'follow',
+          startDate: buyDate,
+          statusMsg: `${gName} ${ticker} 매수일(${buyDate}) 추종 백테스트 완료`,
+        });
+      }
+    };
+  });
+
+  $$('[data-guru-strat]', grid).forEach((btn) => {
+    btn.onclick = () => {
+      const ticker = btn.dataset.guruStrat;
+      const gName = btn.dataset.guruName || '구루';
+      if (ticker) {
+        _runGuruBacktest([ticker], {
+          modeType: 'strategy',
+          startDate: '2023-01-01',
+          statusMsg: `${gName} ${ticker} 일봉 추세·눌림목 전략 테스트 완료`,
+        });
+      }
     };
   });
 
@@ -2532,6 +2565,9 @@ function renderUsGurusSection() {
       const ticker = btn.dataset.guruAdd;
       if (!ticker) return;
       addTicker(ticker);
+      if (state.tickers.length > Number($('#max-positions')?.value || 1)) {
+        $('#max-positions').value = String(state.tickers.length);
+      }
       const prev = btn.textContent;
       btn.textContent = '✅ 추가됨';
       setTimeout(() => { btn.textContent = prev; }, 1400);
@@ -2539,31 +2575,80 @@ function renderUsGurusSection() {
   });
 }
 
-function _runGuruBacktest(tickers, statusMsg) {
+async function _runGuruBacktest(tickers, opts = {}) {
   const uniq = [...new Set((tickers || []).filter(Boolean))];
   if (!uniq.length) return;
+  const modeType = opts.modeType || 'follow';
   setMode('strategy');
   state.tickers = uniq;
+  if ($('#max-positions')) $('#max-positions').value = String(Math.max(1, uniq.length));
   const w = Math.round((100 / uniq.length) * 10) / 10;
   state.allocWeights = Object.fromEntries(uniq.map((t) => [t, w]));
   renderSelectedTickers();
   renderAllocWeights();
-  setStatus(statusMsg, 'info');
-  runBacktest(true);
-  const topAnchor = $('#equity-card') || $('#tab-summary');
-  if (topAnchor && !isMobileView()) topAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  if ($('#strategy-select')) {
+    $('#strategy-select').value = 'custom';
+    onStrategySelectChange(false);
+  }
+
+  if (modeType === 'follow') {
+    if ($('#start-date')) $('#start-date').value = opts.startDate || '2025-04-01';
+    if ($('#benchmark-select')) $('#benchmark-select').value = 'SPY';
+    if ($('#entry-input')) $('#entry-input').value = 'CLOSE > 0';
+    if ($('#exit-input')) $('#exit-input').value = '';
+    if ($('#mtf-close-only')) $('#mtf-close-only').checked = false;
+  } else {
+    if ($('#start-date')) $('#start-date').value = opts.startDate || '2023-01-01';
+    if ($('#benchmark-select')) $('#benchmark-select').value = 'auto';
+    const curEntry = ($('#entry-input')?.value || '').trim();
+    if (!curEntry || curEntry === 'CLOSE > 0' || curEntry.includes('M_')) {
+      if ($('#entry-input')) $('#entry-input').value = 'CLOSE > MA(60) AND RSI(14) <= 48';
+      if ($('#exit-input')) $('#exit-input').value = 'RSI(14) >= 74 OR CLOSE < MA(60) * 0.94';
+    }
+    if ($('#mtf-close-only')) $('#mtf-close-only').checked = false;
+  }
+
+  $$('#period-chips .mini-chip').forEach((c) => c.classList.remove('active'));
+  state.equityZoom = 'ALL';
+  $$('#equity-zoom-group .seg-btn').forEach((x) => x.classList.toggle('active', (x.dataset.ezoom || 'ALL') === 'ALL'));
+  state.chartUnit = 'pct';
+  $$('#chart-unit-group .seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.unit === 'pct'));
+
+  const topAnchor = $('#verdict-card') || $('#equity-card') || $('#tab-summary');
+  if (topAnchor) topAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  pushFormulaHistory();
+  await inspectFormula(false);
+  await runBacktest(true);
+  if (opts.statusMsg && $('#error-banner')?.classList.contains('hidden')) {
+    setStatus(`🟢 ${opts.statusMsg}`, 'ok');
+  }
 }
 
-function runGuruFilteredBasket() {
+async function runGuruFilteredBasket(modeType = 'follow') {
+  if (!state.guruData) {
+    await loadUsGurus();
+  }
   const picks = state.guruData?.picks || [];
   const filtered = state.guruFilter === 'all'
     ? picks
     : picks.filter((p) => p.guru_id === state.guruFilter);
   const uniq = [...new Set(filtered.map((p) => p.ticker).filter(Boolean))];
+  if (!uniq.length) return;
+  const dates = filtered.map((p) => p.matched_buy_date || p.buy_date).filter(Boolean).sort();
+  const earliestBuyDate = dates[0] || '2025-04-01';
   const label = state.guruFilter === 'all'
     ? '전체 구루'
     : ((state.guruData?.gurus || []).find((g) => g.id === state.guruFilter)?.name || state.guruFilter);
-  _runGuruBacktest(uniq, `🦅 ${label} 매수 바스켓(${uniq.length}종목) 백테스트를 실행합니다.`);
+  const msg = modeType === 'follow'
+    ? `${label} 매수추종 바스켓(${uniq.length}종목, ${earliestBuyDate}~)`
+    : `${label} 타점전략 바스켓(${uniq.length}종목)`;
+  await _runGuruBacktest(uniq, {
+    modeType,
+    startDate: modeType === 'follow' ? earliestBuyDate : '2023-01-01',
+    statusMsg: msg,
+  });
 }
 
 function renderRadarChart(data) {
@@ -3858,7 +3943,10 @@ function bindEvents() {
     };
   });
   if ($('#btn-guru-run-basket')) {
-    $('#btn-guru-run-basket').onclick = () => runGuruFilteredBasket();
+    $('#btn-guru-run-basket').onclick = () => runGuruFilteredBasket('follow');
+  }
+  if ($('#btn-guru-strat-basket')) {
+    $('#btn-guru-strat-basket').onclick = () => runGuruFilteredBasket('strategy');
   }
 
   // 실험 보드 컨트롤
