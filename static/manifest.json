@@ -1,0 +1,18 @@
+{
+  "name": "Backtest Pro — Quant Workbench",
+  "short_name": "BacktestPro",
+  "description": "실시간 수식 번역 · 슬라이더 튜닝 · 다중 전략 퀀트 백테스팅 워크벤치",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070B14",
+  "theme_color": "#070B14",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232563EB'/%3E%3Cstop offset='1' stop-color='%2300D084'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='128' height='128' rx='28' fill='%23070B14'/%3E%3Crect x='8' y='8' width='112' height='112' rx='24' fill='url(%23g)' opacity='0.22' stroke='%233B82F6' stroke-width='4'/%3E%3Ctext x='64' y='84' font-size='64' text-anchor='middle' fill='%23F8FAFC'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

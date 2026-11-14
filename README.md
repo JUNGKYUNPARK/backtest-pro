@@ -1,2 +1,6 @@
-# backtest-pro
-Backtest Pro Quant Workbench
+# Backtest Pro — Quant Workbench (한국/미국 주식·국가지수·스마트머니 백테스터)
+
+- 실시간 수식 번역 · 슬라이더 0ms 파라미터 조절 · 매매 타점 캔들 차트
+- 외국인·기관 수급(스마트머니) · 선행 PER · 목표가 괴리 · VIX/금리/환율 · 시점별 뉴스
+- 국가 대표 지수(코스피/코스닥/S&P500/나스닥/반도체/닛케이) & 역사적 주요사건 매핑
+- 노트북 ↔ Render 무료 24시간 클라우드 & GitHub 자동 전략 동기화 지원
